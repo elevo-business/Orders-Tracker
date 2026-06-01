@@ -3,7 +3,12 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import path from 'node:path';
 
+// Basis-Pfad: lokal „/", auf GitHub Pages das Repo-Unterverzeichnis
+// (via Umgebungsvariable VITE_BASE im Deploy-Workflow gesetzt).
+const base = process.env.VITE_BASE ?? '/';
+
 export default defineConfig({
+  base,
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src'),
