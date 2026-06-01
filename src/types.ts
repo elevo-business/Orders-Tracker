@@ -1,5 +1,28 @@
 export type ID = string;
 
+/** Rollen bestimmen, was ein angemeldeter Benutzer sehen und tun darf. */
+export type Role = 'admin' | 'kellner' | 'kueche';
+
+/** Eine Zubereitungs-Station bzw. „Küche", z. B. Küche, Bar, Pizza.
+ *  Bestellpositionen werden über ihre Kategorie an eine Station geroutet. */
+export interface Station {
+  id: ID;
+  name: string;
+  emoji: string;
+  color: string;
+}
+
+/** Benutzerkonto mit PIN-Anmeldung. */
+export interface User {
+  id: ID;
+  name: string;
+  /** 4-stellige PIN für die Schnellanmeldung. */
+  pin: string;
+  role: Role;
+  /** Stationen, die diesem Konto zugeordnet sind (relevant für Rolle „kueche"). */
+  stationIds: ID[];
+}
+
 /** Eine Speisekarten-Kategorie, z. B. „Vorspeisen", „Getränke". */
 export interface Category {
   id: ID;
@@ -7,6 +30,8 @@ export interface Category {
   color: string;
   emoji: string;
   sort: number;
+  /** Station/Küche, die Produkte dieser Kategorie zubereitet. */
+  stationId: ID;
 }
 
 /** Aufpreis-Option für ein Produkt, z. B. „extra Käse" +0,80 €. */
@@ -36,6 +61,8 @@ export interface OrderItem {
   id: ID;
   productId: ID;
   name: string;
+  /** Station/Küche, an die diese Position geroutet wird (Snapshot beim Erfassen). */
+  stationId: ID;
   /** Einzelpreis inkl. gewählter Optionen, in Cent. */
   unitPrice: number;
   qty: number;

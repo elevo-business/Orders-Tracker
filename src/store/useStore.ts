@@ -9,14 +9,25 @@ import type {
   Payment,
   Product,
   Settings,
+  Station,
   Table,
+  User,
 } from '@/types';
 import { uid } from '@/lib/id';
-import { seedCategories, seedProducts, seedSettings, seedTables } from './seed';
+import {
+  seedCategories,
+  seedProducts,
+  seedSettings,
+  seedStations,
+  seedTables,
+  seedUsers,
+} from './seed';
 
 /** Felder, die persistiert und zwischen Tabs/Geräten synchronisiert werden. */
 interface DataState {
   settings: Settings;
+  stations: Station[];
+  users: User[];
   categories: Category[];
   products: Product[];
   tables: Table[];
@@ -25,6 +36,16 @@ interface DataState {
 }
 
 interface Actions {
+  // Stationen / Küchen
+  addStation: (data: Omit<Station, 'id'>) => void;
+  updateStation: (id: ID, patch: Partial<Station>) => void;
+  removeStation: (id: ID) => void;
+
+  // Benutzer
+  addUser: (data: Omit<User, 'id'>) => void;
+  updateUser: (id: ID, patch: Partial<User>) => void;
+  removeUser: (id: ID) => void;
+
   // Speisekarte
   addCategory: (data: Omit<Category, 'id' | 'sort'>) => void;
   updateCategory: (id: ID, patch: Partial<Category>) => void;
@@ -42,7 +63,10 @@ interface Actions {
   setItemNote: (orderId: ID, itemId: ID, note: string) => void;
   sendOrder: (orderId: ID) => void;
   setItemStatus: (orderId: ID, itemId: ID, status: OrderItem['status']) => void;
-  bumpOrder: (orderId: ID) => void;
+  /** Markiert alle in Zubereitung befindlichen Positionen der angegebenen Stationen als fertig. */
+  bumpStation: (orderId: ID, stationIds: ID[]) => void;
+  /** Setzt fertige Positionen der Stationen zurück in Zubereitung (Recall). */
+  recallStation: (orderId: ID, stationIds: ID[]) => void;
   payOrder: (orderId: ID, payment: Payment) => void;
   cancelOrder: (orderId: ID) => void;
 
@@ -55,6 +79,8 @@ type Store = DataState & Actions;
 
 const initialData: DataState = {
   settings: seedSettings,
+  stations: seedStations,
+  users: seedUsers,
   categories: seedCategories,
   products: seedProducts,
   tables: seedTables,
@@ -62,13 +88,31 @@ const initialData: DataState = {
   orderCounter: 0,
 };
 
-const STORAGE_KEY = 'elevo-pos-v1';
+const STORAGE_KEY = 'elevo-pos-v2';
 const SYNC_CHANNEL = 'elevo-pos-sync';
 
 export const useStore = create<Store>()(
   persist(
     (set, get) => ({
       ...initialData,
+
+      addStation: (data) => set((s) => ({ stations: [...s.stations, { ...data, id: uid('st-') }] })),
+      updateStation: (id, patch) =>
+        set((s) => ({ stations: s.stations.map((st) => (st.id === id ? { ...st, ...patch } : st)) })),
+      removeStation: (id) =>
+        set((s) => ({
+          stations: s.stations.filter((st) => st.id !== id),
+          // Verwaiste Kategorien einer anderen Station zuordnen
+          categories: s.categories.map((c) =>
+            c.stationId === id ? { ...c, stationId: s.stations.find((st) => st.id !== id)?.id ?? '' } : c,
+          ),
+          users: s.users.map((u) => ({ ...u, stationIds: u.stationIds.filter((sid) => sid !== id) })),
+        })),
+
+      addUser: (data) => set((s) => ({ users: [...s.users, { ...data, id: uid('u-') }] })),
+      updateUser: (id, patch) =>
+        set((s) => ({ users: s.users.map((u) => (u.id === id ? { ...u, ...patch } : u)) })),
+      removeUser: (id) => set((s) => ({ users: s.users.filter((u) => u.id !== id) })),
 
       addCategory: (data) =>
         set((s) => ({
@@ -127,6 +171,7 @@ export const useStore = create<Store>()(
           orders: s.orders.map((o) => {
             if (o.id !== orderId) return o;
             const unitPrice = product.price + modifiers.reduce((sum, m) => sum + m.price, 0);
+            const stationId = s.categories.find((c) => c.id === product.categoryId)?.stationId ?? '';
             const modSig = modifiers.map((m) => m.id).sort().join(',');
             // Gleiche Position (Produkt + Optionen + Notiz), die noch nicht gefeuert wurde → Menge erhöhen.
             const match = o.items.find(
@@ -147,6 +192,7 @@ export const useStore = create<Store>()(
               id: uid('i-') + modSig,
               productId: product.id,
               name: product.name,
+              stationId,
               unitPrice,
               qty: 1,
               modifiers: modifiers.map((m) => ({ name: m.name, price: m.price })),
@@ -205,14 +251,32 @@ export const useStore = create<Store>()(
           ),
         })),
 
-      bumpOrder: (orderId) =>
+      bumpStation: (orderId, stationIds) =>
         set((s) => ({
           orders: s.orders.map((o) =>
             o.id === orderId
               ? {
                   ...o,
                   items: o.items.map((i) =>
-                    i.status === 'zubereitung' ? { ...i, status: 'fertig' as const } : i,
+                    i.status === 'zubereitung' && stationIds.includes(i.stationId)
+                      ? { ...i, status: 'fertig' as const }
+                      : i,
+                  ),
+                }
+              : o,
+          ),
+        })),
+
+      recallStation: (orderId, stationIds) =>
+        set((s) => ({
+          orders: s.orders.map((o) =>
+            o.id === orderId
+              ? {
+                  ...o,
+                  items: o.items.map((i) =>
+                    i.status === 'fertig' && stationIds.includes(i.stationId)
+                      ? { ...i, status: 'zubereitung' as const }
+                      : i,
                   ),
                 }
               : o,
@@ -258,6 +322,8 @@ export const useStore = create<Store>()(
 
 const DATA_KEYS: (keyof DataState)[] = [
   'settings',
+  'stations',
+  'users',
   'categories',
   'products',
   'tables',
@@ -268,6 +334,8 @@ const DATA_KEYS: (keyof DataState)[] = [
 function pickData(state: Store): DataState {
   return {
     settings: state.settings,
+    stations: state.stations,
+    users: state.users,
     categories: state.categories,
     products: state.products,
     tables: state.tables,

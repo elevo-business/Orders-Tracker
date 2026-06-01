@@ -1,4 +1,4 @@
-import type { Category, Product, Table, Settings } from '@/types';
+import type { Category, Product, Table, Settings, Station, User } from '@/types';
 
 export const seedSettings: Settings = {
   restaurantName: 'Elevo Bistro',
@@ -7,13 +7,26 @@ export const seedSettings: Settings = {
   address: 'Musterstraße 1, 10115 Berlin',
 };
 
+export const seedStations: Station[] = [
+  { id: 'st-kitchen', name: 'Küche', emoji: '🍳', color: '#ef4444' },
+  { id: 'st-pizza', name: 'Pizza-Ofen', emoji: '🍕', color: '#eab308' },
+  { id: 'st-bar', name: 'Bar', emoji: '🍷', color: '#3b82f6' },
+];
+
+export const seedUsers: User[] = [
+  { id: 'u-admin', name: 'Admin', pin: '1234', role: 'admin', stationIds: [] },
+  { id: 'u-service', name: 'Max (Service)', pin: '1111', role: 'kellner', stationIds: [] },
+  { id: 'u-kitchen', name: 'Küche', pin: '2222', role: 'kueche', stationIds: ['st-kitchen', 'st-pizza'] },
+  { id: 'u-bar', name: 'Bar', pin: '3333', role: 'kueche', stationIds: ['st-bar'] },
+];
+
 export const seedCategories: Category[] = [
-  { id: 'cat-starter', name: 'Vorspeisen', color: '#f97316', emoji: '🥗', sort: 1 },
-  { id: 'cat-main', name: 'Hauptgerichte', color: '#ef4444', emoji: '🍝', sort: 2 },
-  { id: 'cat-pizza', name: 'Pizza', color: '#eab308', emoji: '🍕', sort: 3 },
-  { id: 'cat-dessert', name: 'Desserts', color: '#ec4899', emoji: '🍰', sort: 4 },
-  { id: 'cat-drink', name: 'Getränke', color: '#3b82f6', emoji: '🥤', sort: 5 },
-  { id: 'cat-coffee', name: 'Heißgetränke', color: '#92400e', emoji: '☕', sort: 6 },
+  { id: 'cat-starter', name: 'Vorspeisen', color: '#f97316', emoji: '🥗', sort: 1, stationId: 'st-kitchen' },
+  { id: 'cat-main', name: 'Hauptgerichte', color: '#ef4444', emoji: '🍝', sort: 2, stationId: 'st-kitchen' },
+  { id: 'cat-pizza', name: 'Pizza', color: '#eab308', emoji: '🍕', sort: 3, stationId: 'st-pizza' },
+  { id: 'cat-dessert', name: 'Desserts', color: '#ec4899', emoji: '🍰', sort: 4, stationId: 'st-kitchen' },
+  { id: 'cat-drink', name: 'Getränke', color: '#3b82f6', emoji: '🥤', sort: 5, stationId: 'st-bar' },
+  { id: 'cat-coffee', name: 'Heißgetränke', color: '#92400e', emoji: '☕', sort: 6, stationId: 'st-bar' },
 ];
 
 export const seedProducts: Product[] = [
