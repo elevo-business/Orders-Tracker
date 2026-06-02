@@ -15,6 +15,7 @@ export const ROLE_BADGE: Record<Role, string> = {
 /** Zentrale Rechtevergabe. Admin darf grundsätzlich alles. */
 export const can = {
   reports: (role?: Role) => role === 'admin',
+  stats: (role?: Role) => role === 'admin',
   history: (role?: Role) => role === 'admin',
   manage: (role?: Role) => role === 'admin',
   menu: (role?: Role) => role === 'admin',

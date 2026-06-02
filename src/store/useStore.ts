@@ -70,11 +70,14 @@ interface Actions {
   setItemNote: (orderId: ID, itemId: ID, note: string) => void;
   sendOrder: (orderId: ID) => void;
   setItemStatus: (orderId: ID, itemId: ID, status: OrderItem['status']) => void;
-  /** Markiert alle in Zubereitung befindlichen Positionen der angegebenen Stationen als fertig. */
+  /** Markiert alle offenen Positionen der angegebenen Stationen als fertig. */
   bumpStation: (orderId: ID, stationIds: ID[]) => void;
-  /** Setzt fertige Positionen der Stationen zurück in Zubereitung (Recall). */
-  recallStation: (orderId: ID, stationIds: ID[]) => void;
-  payOrder: (orderId: ID, payment: Payment) => void;
+  /** Schließt den Bon ab: alle Positionen der Stationen werden „serviert" und
+   *  verschwinden damit vom Küchen-Display. */
+  serveStation: (orderId: ID, stationIds: ID[]) => void;
+  /** Bezahlt die Bestellung. Ohne `selection` wird der gesamte offene Betrag
+   *  bezahlt; mit `selection` nur die angegebenen Artikelmengen (Teilzahlung). */
+  payOrder: (orderId: ID, payment: Payment, selection?: { itemId: ID; qty: number }[]) => void;
   cancelOrder: (orderId: ID) => void;
 
   // Einstellungen / Wartung
@@ -95,7 +98,7 @@ const initialData: DataState = {
   orderCounter: 0,
 };
 
-const STORAGE_KEY = 'elevo-pos-v3';
+const STORAGE_KEY = 'elevo-pos-v4';
 const SYNC_CHANNEL = 'elevo-pos-sync';
 
 export const useStore = create<Store>()(
@@ -153,6 +156,7 @@ export const useStore = create<Store>()(
           items: [],
           status: 'offen',
           createdAt: Date.now(),
+          payments: [],
         };
         set((s) => ({ orders: [...s.orders, order], orderCounter: number }));
         return order.id;
@@ -168,6 +172,7 @@ export const useStore = create<Store>()(
           items: [],
           status: 'offen',
           createdAt: Date.now(),
+          payments: [],
         };
         set((s) => ({ orders: [...s.orders, order], orderCounter: number }));
         return order.id;
@@ -217,9 +222,14 @@ export const useStore = create<Store>()(
         set((s) => ({
           orders: s.orders.map((o) => {
             if (o.id !== orderId) return o;
-            const items = o.items
-              .map((i) => (i.id === itemId ? { ...i, qty: i.qty + delta } : i))
-              .filter((i) => i.qty > 0);
+            const items = o.items.flatMap((i) => {
+              if (i.id !== itemId) return [i];
+              const paid = Math.max(0, i.paidQty ?? 0);
+              // Menge nie unter die bereits bezahlte Menge senken.
+              const newQty = Math.max(paid, i.qty + delta);
+              if (newQty <= 0) return []; // nur entfernen, wenn nichts bezahlt ist
+              return [{ ...i, qty: newQty }];
+            });
             return { ...o, items };
           }),
         })),
@@ -227,7 +237,10 @@ export const useStore = create<Store>()(
       removeItem: (orderId, itemId) =>
         set((s) => ({
           orders: s.orders.map((o) =>
-            o.id === orderId ? { ...o, items: o.items.filter((i) => i.id !== itemId) } : o,
+            o.id === orderId
+              ? // Bereits (teil-)bezahlte Positionen lassen sich nicht löschen.
+                { ...o, items: o.items.filter((i) => i.id !== itemId || (i.paidQty ?? 0) > 0) }
+              : o,
           ),
         })),
 
@@ -277,15 +290,15 @@ export const useStore = create<Store>()(
           ),
         })),
 
-      recallStation: (orderId, stationIds) =>
+      serveStation: (orderId, stationIds) =>
         set((s) => ({
           orders: s.orders.map((o) =>
             o.id === orderId
               ? {
                   ...o,
                   items: o.items.map((i) =>
-                    i.status === 'fertig' && stationIds.includes(i.stationId)
-                      ? { ...i, status: 'zubereitung' as const }
+                    (i.status === 'zubereitung' || i.status === 'fertig') && stationIds.includes(i.stationId)
+                      ? { ...i, status: 'serviert' as const }
                       : i,
                   ),
                 }
@@ -293,19 +306,33 @@ export const useStore = create<Store>()(
           ),
         })),
 
-      payOrder: (orderId, payment) =>
+      payOrder: (orderId, payment, selection) =>
         set((s) => ({
-          orders: s.orders.map((o) =>
-            o.id === orderId
-              ? {
-                  ...o,
-                  status: 'bezahlt',
-                  paidAt: Date.now(),
-                  payment,
-                  items: o.items.map((i) => ({ ...i, status: 'serviert' as const })),
-                }
-              : o,
-          ),
+          orders: s.orders.map((o) => {
+            if (o.id !== orderId) return o;
+            let items: OrderItem[];
+            if (!selection) {
+              // Gesamten offenen Betrag bezahlen.
+              items = o.items.map((i) => ({ ...i, paidQty: i.qty }));
+            } else {
+              const want = new Map(selection.map((x) => [x.itemId, Math.max(0, x.qty)]));
+              items = o.items.map((i) => {
+                const add = want.get(i.id);
+                if (!add) return i;
+                // Bezahlte Menge erhöhen, aber nie über die Gesamtmenge.
+                const paid = Math.min(i.qty, Math.max(0, i.paidQty ?? 0) + add);
+                return { ...i, paidQty: paid };
+              });
+            }
+            const fullyPaid = items.length > 0 && items.every((i) => (i.paidQty ?? 0) >= i.qty);
+            return {
+              ...o,
+              items,
+              payments: [...o.payments, payment],
+              status: fullyPaid ? 'bezahlt' : o.status,
+              paidAt: fullyPaid ? Date.now() : o.paidAt,
+            };
+          }),
         })),
 
       cancelOrder: (orderId) =>

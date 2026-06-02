@@ -79,6 +79,8 @@ export interface OrderItem {
   /** Einzelpreis inkl. Variante und gewählter Optionen, in Cent. */
   unitPrice: number;
   qty: number;
+  /** Bereits bezahlte Menge (für Teilzahlungen / Splitten nach Artikeln). */
+  paidQty?: number;
   modifiers: { name: string; price: number }[];
   note?: string;
   status: ItemStatus;
@@ -105,6 +107,10 @@ export interface Payment {
   change: number;
   /** Trinkgeld in Cent. */
   tip: number;
+  /** Zeitpunkt der Zahlung. */
+  at: number;
+  /** Bezahlter Warenwert (ohne Trinkgeld) in Cent. */
+  amount: number;
 }
 
 export interface Order {
@@ -118,7 +124,8 @@ export interface Order {
   createdAt: number;
   sentAt?: number;
   paidAt?: number;
-  payment?: Payment;
+  /** Alle (auch Teil-) Zahlungen dieser Bestellung. */
+  payments: Payment[];
 }
 
 export interface Table {

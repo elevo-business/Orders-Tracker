@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Minus, Plus, Send, Trash2, CreditCard, StickyNote, ShoppingCart, UtensilsCrossed, Search, X } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 import { formatMoney } from '@/lib/money';
-import { itemTotal, orderTotal, orderTax, unsentItems, orderItemCount } from '@/lib/order';
+import { itemTotal, orderTotal, orderTax, unsentItems, orderItemCount, orderRemaining, orderPaidAmount, paidQty } from '@/lib/order';
 import type { ModifierOption, Product, Variant } from '@/types';
 
 /** Anzuzeigender Kartenpreis: bei Varianten der günstigste mit „ab". */
@@ -57,6 +57,8 @@ export function OrderPage() {
     ? products.filter((p) => p.active && p.name.toLowerCase().includes(trimmedQuery))
     : products.filter((p) => p.categoryId === activeCat && p.active);
   const total = orderTotal(order);
+  const remaining = orderRemaining(order);
+  const paidAmount = orderPaidAmount(order);
   const tax = orderTax(order, settings);
   const newCount = unsentItems(order).length;
   const itemCount = orderItemCount(order);
@@ -213,6 +215,11 @@ export function OrderPage() {
                         {item.status}
                       </span>
                     )}
+                    {paidQty(item) > 0 && (
+                      <span className="mt-1 ml-1 inline-block rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold uppercase text-green-700">
+                        {paidQty(item)}/{item.qty} bezahlt
+                      </span>
+                    )}
                   </div>
                   <span className="shrink-0 font-bold">{formatMoney(itemTotal(item))}</span>
                 </div>
@@ -238,7 +245,7 @@ export function OrderPage() {
                       >
                         <StickyNote size={16} />
                       </button>
-                      {item.status === 'neu' && (
+                      {item.status === 'neu' && paidQty(item) === 0 && (
                         <button
                           onClick={() => removeItem(order.id, item.id)}
                           className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-red-500 shadow-card active:scale-95"
@@ -259,9 +266,15 @@ export function OrderPage() {
               <span>inkl. {(settings.taxRate * 100).toFixed(0)}% MwSt</span>
               <span>{formatMoney(tax)}</span>
             </div>
+            {paidAmount > 0 && !isPaid && (
+              <div className="mb-1 flex justify-between text-sm font-semibold text-green-600">
+                <span>Bereits bezahlt</span>
+                <span>− {formatMoney(paidAmount)}</span>
+              </div>
+            )}
             <div className="mb-4 flex justify-between text-2xl font-extrabold">
-              <span>Gesamt</span>
-              <span>{formatMoney(total)}</span>
+              <span>{paidAmount > 0 && !isPaid ? 'Offen' : 'Gesamt'}</span>
+              <span>{formatMoney(isPaid ? total : remaining)}</span>
             </div>
 
             {!isPaid ? (
@@ -271,7 +284,7 @@ export function OrderPage() {
                 </button>
                 <button
                   onClick={() => setCheckoutOpen(true)}
-                  disabled={order.items.length === 0}
+                  disabled={remaining === 0}
                   className="btn-primary"
                 >
                   <CreditCard size={18} /> Bezahlen
@@ -316,9 +329,9 @@ export function OrderPage() {
         <CheckoutModal
           order={order}
           onClose={() => setCheckoutOpen(false)}
-          onPaid={() => {
+          onDone={(fullyPaid) => {
             setCheckoutOpen(false);
-            navigate('/pos');
+            if (fullyPaid) navigate('/pos');
           }}
         />
       )}

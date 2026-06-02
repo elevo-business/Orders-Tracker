@@ -2,14 +2,16 @@ import { useMemo, useState } from 'react';
 import { Banknote, CreditCard, ReceiptText, Search, Split } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 import { formatMoney } from '@/lib/money';
-import { itemTotal, orderTax, orderTotal } from '@/lib/order';
+import { itemTotal, orderTax, orderTotal, orderTips } from '@/lib/order';
 import type { Order } from '@/types';
 import { Modal } from '@/components/Modal';
 
 function methodLabel(order: Order): { label: string; icon: React.ReactNode } {
-  const parts = order.payment?.parts ?? [];
-  if (parts.length > 1) return { label: 'Split', icon: <Split size={16} /> };
-  if (parts[0]?.method === 'karte') return { label: 'Karte', icon: <CreditCard size={16} /> };
+  const methods = new Set<string>();
+  order.payments.forEach((p) => p.parts.forEach((part) => methods.add(part.method)));
+  const split = order.payments.length > 1 || methods.size > 1;
+  if (split) return { label: 'Geteilt', icon: <Split size={16} /> };
+  if (methods.has('karte')) return { label: 'Karte', icon: <CreditCard size={16} /> };
   return { label: 'Bar', icon: <Banknote size={16} /> };
 }
 
@@ -118,7 +120,9 @@ export function HistoryPage() {
 function Receipt({ order }: { order: Order }) {
   const settings = useStore((s) => s.settings);
   const tax = orderTax(order, settings);
-  const tip = order.payment?.tip ?? 0;
+  const tip = orderTips(order);
+  const parts = order.payments.flatMap((p) => p.parts);
+  const totalChange = order.payments.reduce((sum, p) => sum + p.change, 0);
 
   return (
     <div className="font-mono text-sm text-slate-700">
@@ -155,12 +159,10 @@ function Receipt({ order }: { order: Order }) {
         </div>
       </div>
       <div className="border-t border-dashed border-slate-300 pt-2 text-xs">
-        {order.payment?.parts.map((p, i) => (
+        {parts.map((p, i) => (
           <Row key={i} label={p.method === 'karte' ? 'Karte' : 'Bar'} value={formatMoney(p.amount)} muted />
         ))}
-        {order.payment && order.payment.change > 0 && (
-          <Row label="Rückgeld" value={formatMoney(order.payment.change)} muted />
-        )}
+        {totalChange > 0 && <Row label="Rückgeld" value={formatMoney(totalChange)} muted />}
       </div>
       <p className="mt-3 text-center text-xs text-slate-400">Vielen Dank für Ihren Besuch!</p>
     </div>

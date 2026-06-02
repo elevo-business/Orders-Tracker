@@ -6,6 +6,7 @@ import { OrderPage } from '@/pages/OrderPage';
 import { KitchenPage } from '@/pages/KitchenPage';
 import { MenuPage } from '@/pages/MenuPage';
 import { ReportsPage } from '@/pages/ReportsPage';
+import { StatsPage } from '@/pages/StatsPage';
 import { HistoryPage } from '@/pages/HistoryPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { useCurrentUser } from '@/store/useCurrentUser';
@@ -33,6 +34,7 @@ export default function App() {
         <Route path="/kitchen" element={guard(can.kitchen(role), <KitchenPage />)} />
         <Route path="/menu" element={guard(can.menu(role), <MenuPage />)} />
         <Route path="/reports" element={guard(can.reports(role), <ReportsPage />)} />
+        <Route path="/stats" element={guard(can.stats(role), <StatsPage />)} />
         <Route path="/history" element={guard(can.history(role), <HistoryPage />)} />
         <Route path="/settings" element={guard(can.manage(role), <SettingsPage />)} />
         <Route path="*" element={<Navigate to={home} replace />} />

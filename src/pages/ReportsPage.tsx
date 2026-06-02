@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Banknote, CreditCard, Receipt, TrendingUp, Trophy } from 'lucide-react';
+import { Banknote, CreditCard, Receipt, TrendingUp, Trophy, Wallet, Calculator } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 import { formatMoney } from '@/lib/money';
 import { orderTotal } from '@/lib/order';
@@ -26,10 +26,20 @@ export function ReportsPage() {
 
   const paid = orders.filter((o) => o.status === 'bezahlt' && o.paidAt && isSameDay(o.paidAt, day));
 
+  // Geld-Summen auf Zahlungs-Basis: zählt ALLE an diesem Tag eingegangenen
+  // Zahlungen (auch Teilzahlungen noch offener Tische) – korrekt für die Kasse.
+  const dayPayments = orders.flatMap((o) => o.payments).filter((p) => isSameDay(p.at, day));
+  const cash = dayPayments.reduce(
+    (s, p) => s + p.parts.filter((x) => x.method === 'bar').reduce((a, b) => a + b.amount, 0),
+    0,
+  );
+  const card = dayPayments.reduce(
+    (s, p) => s + p.parts.filter((x) => x.method === 'karte').reduce((a, b) => a + b.amount, 0),
+    0,
+  );
+  const tips = dayPayments.reduce((s, p) => s + p.tip, 0);
+
   const revenue = paid.reduce((sum, o) => sum + orderTotal(o), 0);
-  const tips = paid.reduce((sum, o) => sum + (o.payment?.tip ?? 0), 0);
-  const cash = sumByMethod(paid, 'bar');
-  const card = sumByMethod(paid, 'karte');
   const avg = paid.length ? Math.round(revenue / paid.length) : 0;
 
   const top = topProducts(paid);
@@ -107,9 +117,136 @@ export function ReportsPage() {
             </div>
           )}
         </div>
+
+        {/* Kassensturz / Tagesabschluss */}
+        <CashUp cashSales={cash} cardSales={card} revenue={revenue} tips={tips} count={paid.length} />
       </div>
     </div>
   );
+}
+
+const DENOMS = [50000, 20000, 10000, 5000, 2000, 1000, 500, 200, 100, 50, 20, 10, 5, 2, 1];
+
+function CashUp({
+  cashSales,
+  cardSales,
+  revenue,
+  tips,
+  count,
+}: {
+  cashSales: number;
+  cardSales: number;
+  revenue: number;
+  tips: number;
+  count: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const [floatStr, setFloatStr] = useState('');
+  const [counts, setCounts] = useState<Record<number, number>>({});
+
+  const floatCents = parseMoneyLocal(floatStr);
+  const counted = DENOMS.reduce((sum, d) => sum + d * (counts[d] ?? 0), 0);
+  // Erwarteter Barbestand = Wechselgeld + alle Bareinnahmen (inkl. Bar-Trinkgeld).
+  const expected = floatCents + cashSales;
+  const diff = counted - expected;
+  const anyCount = counted > 0;
+
+  return (
+    <div className="card mt-4 p-5">
+      <button onClick={() => setOpen((o) => !o)} className="flex w-full items-center justify-between">
+        <h3 className="flex items-center gap-2 font-bold">
+          <Wallet size={18} className="text-emerald-600" /> Kassensturz / Tagesabschluss
+        </h3>
+        <span className="text-sm font-bold text-brand-600">{open ? 'Schließen' : 'Öffnen'}</span>
+      </button>
+
+      {open && (
+        <div className="mt-4 grid grid-cols-1 gap-5 lg:grid-cols-2">
+          {/* Sollwerte */}
+          <div className="space-y-2">
+            <Summary label="Umsatz gesamt" value={formatMoney(revenue)} />
+            <Summary label="davon Karte" value={formatMoney(cardSales)} muted />
+            <Summary label="davon Bar" value={formatMoney(cashSales)} muted />
+            <Summary label="Trinkgeld" value={formatMoney(tips)} muted />
+            <Summary label="Bestellungen" value={String(count)} muted />
+
+            <div className="pt-2">
+              <label className="mb-1 block text-sm font-semibold text-slate-500">Wechselgeld / Anfangsbestand</label>
+              <input
+                value={floatStr}
+                onChange={(e) => setFloatStr(e.target.value)}
+                inputMode="decimal"
+                placeholder="0,00"
+                className="input text-right"
+              />
+            </div>
+
+            <div className="mt-2 rounded-xl bg-slate-50 p-3">
+              <Summary label="Erwarteter Barbestand" value={formatMoney(expected)} />
+              {anyCount && (
+                <>
+                  <Summary label="Gezählt" value={formatMoney(counted)} />
+                  <div
+                    className={`mt-1 flex justify-between rounded-lg px-3 py-2 text-lg font-extrabold ${
+                      diff === 0 ? 'bg-green-100 text-green-700' : diff > 0 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'
+                    }`}
+                  >
+                    <span>{diff === 0 ? 'Stimmt' : diff > 0 ? 'Überschuss' : 'Fehlbetrag'}</span>
+                    <span>{diff > 0 ? '+' : ''}{formatMoney(diff)}</span>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Geldzähler */}
+          <div>
+            <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-500">
+              <Calculator size={16} /> Bargeld zählen
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {DENOMS.map((d) => (
+                <div key={d} className="flex items-center gap-2 rounded-lg border border-slate-200 px-2 py-1.5">
+                  <span className="w-14 shrink-0 text-sm font-bold text-slate-500">{formatMoney(d)}</span>
+                  <span className="text-slate-300">×</span>
+                  <input
+                    value={counts[d] ?? ''}
+                    onChange={(e) =>
+                      setCounts((c) => ({ ...c, [d]: Math.max(0, parseInt(e.target.value, 10) || 0) }))
+                    }
+                    inputMode="numeric"
+                    placeholder="0"
+                    className="w-full rounded-md border border-slate-200 px-2 py-1 text-right outline-none focus:border-brand-400"
+                  />
+                  <span className="w-16 shrink-0 text-right text-xs text-slate-400">
+                    {formatMoney(d * (counts[d] ?? 0))}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => setCounts({})} className="mt-3 text-sm font-bold text-slate-400">
+              Zählung zurücksetzen
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Summary({ label, value, muted }: { label: string; value: string; muted?: boolean }) {
+  return (
+    <div className={`flex justify-between text-sm ${muted ? 'text-slate-500' : 'font-semibold'}`}>
+      <span>{label}</span>
+      <span>{value}</span>
+    </div>
+  );
+}
+
+/** Lokale Geld-Eingabe (wie parseMoney, ohne zusätzlichen Import zu erzwingen). */
+function parseMoneyLocal(input: string): number {
+  const n = Number.parseFloat(input.replace(/[^\d,.-]/g, '').replace(',', '.'));
+  return Number.isNaN(n) ? 0 : Math.round(n * 100);
 }
 
 function Kpi({ icon, label, value, accent }: { icon: React.ReactNode; label: string; value: string; accent: string }) {
@@ -136,13 +273,6 @@ function PayBar({ icon, label, amount, total, color }: { icon: React.ReactNode; 
         <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
       </div>
     </div>
-  );
-}
-
-function sumByMethod(orders: Order[], method: 'bar' | 'karte'): number {
-  return orders.reduce(
-    (sum, o) => sum + (o.payment?.parts.filter((p) => p.method === method).reduce((s, p) => s + p.amount, 0) ?? 0),
-    0,
   );
 }
 

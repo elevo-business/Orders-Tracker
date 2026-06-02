@@ -8,6 +8,7 @@ import {
   Settings,
   UtensilsCrossed,
   ReceiptText,
+  LineChart,
   LogOut,
 } from 'lucide-react';
 import { useStore } from '@/store/useStore';
@@ -34,7 +35,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const myStationIds = allowedStations(user, stations).map((s) => s.id);
 
   const openKitchenItems = orders
-    .filter((o) => o.status === 'gesendet')
+    .filter((o) => o.status !== 'storniert')
     .flatMap((o) => o.items)
     .filter((i) => i.status === 'zubereitung' && myStationIds.includes(i.stationId)).length;
 
@@ -45,6 +46,7 @@ export function Shell({ children }: { children: ReactNode }) {
     { to: '/kitchen', label: 'Küche', icon: <ChefHat size={22} />, badge: openKitchenItems, show: can.kitchen(role) },
     { to: '/menu', label: 'Karte', icon: <UtensilsCrossed size={22} />, show: can.menu(role) },
     { to: '/reports', label: 'Berichte', icon: <BarChart3 size={22} />, show: can.reports(role) },
+    { to: '/stats', label: 'Statistik', icon: <LineChart size={22} />, show: can.stats(role) },
     { to: '/history', label: 'Rechnungen', icon: <ReceiptText size={22} />, show: can.history(role) },
     { to: '/settings', label: 'Verwaltung', icon: <Settings size={22} />, show: can.manage(role) },
   ].filter((item) => item.show);
@@ -64,7 +66,7 @@ export function Shell({ children }: { children: ReactNode }) {
             <span className="text-[10px] font-bold tracking-wide text-slate-500">ELEVO</span>
           </div>
 
-          <nav className="flex flex-1 flex-col items-center gap-1">
+          <nav className="scroll-area flex flex-1 flex-col items-center gap-1 overflow-y-auto">
             {nav.map((item) => (
               <NavLink
                 key={item.to}

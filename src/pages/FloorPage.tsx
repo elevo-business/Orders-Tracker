@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { ShoppingBag, Users, Clock } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 import { formatMoney } from '@/lib/money';
-import { orderTotal } from '@/lib/order';
+import { orderRemaining } from '@/lib/order';
 import type { Order, Table } from '@/types';
 
 function minutesSince(ts?: number): number {
@@ -69,7 +69,7 @@ export function FloorPage() {
                     <ShoppingBag size={18} className="text-amber-500" /> #{o.number}
                   </span>
                   <span className="text-sm text-slate-500">{o.items.length} Pos.</span>
-                  <span className="text-lg font-extrabold">{formatMoney(orderTotal(o))}</span>
+                  <span className="text-lg font-extrabold">{formatMoney(orderRemaining(o))}</span>
                 </button>
               ))}
             </div>
@@ -85,7 +85,7 @@ export function FloorPage() {
                 .map((table) => {
                   const order = activeOrderByTable.get(table.id);
                   const occupied = !!order;
-                  const total = order ? orderTotal(order) : 0;
+                  const total = order ? orderRemaining(order) : 0;
                   const mins = minutesSince(order?.createdAt);
                   return (
                     <button

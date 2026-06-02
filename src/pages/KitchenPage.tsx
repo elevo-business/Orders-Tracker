@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Clock, Flame, Volume2, VolumeX, Undo2 } from 'lucide-react';
+import { Check, Clock, Flame, Volume2, VolumeX } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 import { useSession } from '@/store/useSession';
 import { useCurrentUser } from '@/store/useCurrentUser';
@@ -30,7 +30,7 @@ export function KitchenPage() {
   const orders = useStore((s) => s.orders);
   const stations = useStore((s) => s.stations);
   const bumpStation = useStore((s) => s.bumpStation);
-  const recallStation = useStore((s) => s.recallStation);
+  const serveStation = useStore((s) => s.serveStation);
   const setItemStatus = useStore((s) => s.setItemStatus);
 
   const user = useCurrentUser();
@@ -62,7 +62,9 @@ export function KitchenPage() {
       orders
         .filter(
           (o) =>
-            o.status === 'gesendet' &&
+            // Auch (vorab) bezahlte Bestellungen bleiben sichtbar, solange noch
+            // etwas zuzubereiten ist. Nur stornierte werden ausgeblendet.
+            o.status !== 'storniert' &&
             o.items.some(
               (i) =>
                 activeStationIds.includes(i.stationId) &&
@@ -181,7 +183,7 @@ export function KitchenPage() {
                 showStationTags={showStationTags}
                 onItem={setItemStatus}
                 onBump={() => bumpStation(order.id, activeStationIds)}
-                onRecall={() => recallStation(order.id, activeStationIds)}
+                onServe={() => serveStation(order.id, activeStationIds)}
               />
             ))}
           </div>
@@ -199,7 +201,7 @@ function KitchenTicket({
   showStationTags,
   onItem,
   onBump,
-  onRecall,
+  onServe,
 }: {
   order: Order;
   now: number;
@@ -208,7 +210,7 @@ function KitchenTicket({
   showStationTags: boolean;
   onItem: (orderId: string, itemId: string, status: OrderItem['status']) => void;
   onBump: () => void;
-  onRecall: () => void;
+  onServe: () => void;
 }) {
   const { mins, label } = elapsed(now, order.sentAt);
   // Farbcodierung nach Wartezeit: <5 Min grau, 5–10 gelb, >10 rot
@@ -241,7 +243,7 @@ function KitchenTicket({
           return (
             <button
               key={item.id}
-              onClick={() => onItem(order.id, item.id, done ? 'serviert' : 'fertig')}
+              onClick={() => onItem(order.id, item.id, done ? 'zubereitung' : 'fertig')}
               className={`flex w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left transition active:scale-[0.98] ${
                 done
                   ? 'bg-green-500/15 text-green-300'
@@ -285,23 +287,24 @@ function KitchenTicket({
       </div>
 
       <div className="flex gap-2 p-3 pt-0">
-        <button
-          onClick={onBump}
-          className={`flex-1 rounded-xl py-3 font-bold transition active:scale-[0.98] ${
-            allReady ? 'bg-green-500 text-white' : 'bg-slate-700 text-slate-200 hover:bg-slate-600'
-          }`}
-        >
-          {allReady ? '✓ Alle fertig' : 'Alle fertig'}
-        </button>
-        {items.some((i) => i.status === 'fertig') && (
+        {!allReady && (
           <button
-            onClick={onRecall}
-            className="flex items-center justify-center rounded-xl bg-slate-700 px-4 text-slate-300 hover:bg-slate-600"
-            title="Zurückholen"
+            onClick={onBump}
+            className="flex-1 rounded-xl bg-slate-700 py-3 font-bold text-slate-200 transition hover:bg-slate-600 active:scale-[0.98]"
           >
-            <Undo2 size={18} />
+            Alle fertig
           </button>
         )}
+        <button
+          onClick={onServe}
+          className={`flex-1 rounded-xl py-3 font-bold transition active:scale-[0.98] ${
+            allReady ? 'bg-green-500 text-white' : 'bg-slate-600 text-white hover:bg-slate-500'
+          }`}
+        >
+          <span className="inline-flex items-center justify-center gap-1.5">
+            <Check size={18} /> Abschließen
+          </span>
+        </button>
       </div>
     </div>
   );
