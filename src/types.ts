@@ -42,14 +42,25 @@ export interface ModifierOption {
   price: number;
 }
 
+/** Eine Variante eines Produkts, z. B. Größe „Klein/Mittel/Groß".
+ *  Genau eine Variante wird gewählt und legt den Grundpreis fest. */
+export interface Variant {
+  id: ID;
+  name: string;
+  /** Absoluter Preis dieser Variante in Cent. */
+  price: number;
+}
+
 export interface Product {
   id: ID;
   categoryId: ID;
   name: string;
-  /** Grundpreis in Cent. */
+  /** Grundpreis in Cent (gilt, wenn keine Varianten definiert sind). */
   price: number;
   description?: string;
   emoji?: string;
+  /** Auswählbare Varianten (z. B. Größen). Leer = keine Auswahl nötig. */
+  variants?: Variant[];
   modifiers: ModifierOption[];
   active: boolean;
 }
@@ -63,7 +74,9 @@ export interface OrderItem {
   name: string;
   /** Station/Küche, an die diese Position geroutet wird (Snapshot beim Erfassen). */
   stationId: ID;
-  /** Einzelpreis inkl. gewählter Optionen, in Cent. */
+  /** Gewählte Variante (z. B. „Groß"), falls das Produkt Varianten hat. */
+  variantName?: string;
+  /** Einzelpreis inkl. Variante und gewählter Optionen, in Cent. */
   unitPrice: number;
   qty: number;
   modifiers: { name: string; price: number }[];

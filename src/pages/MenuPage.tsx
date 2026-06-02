@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Pencil, Plus, Trash2, EyeOff, Eye } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 import { formatMoney, parseMoney } from '@/lib/money';
-import type { ModifierOption, Product } from '@/types';
+import type { ModifierOption, Product, Variant } from '@/types';
 import { Modal } from '@/components/Modal';
 import { uid } from '@/lib/id';
 
@@ -53,7 +53,9 @@ export function MenuPage() {
               <div className="min-w-0 flex-1">
                 <p className="truncate font-bold">{product.name}</p>
                 <p className="text-sm text-slate-500">
-                  {formatMoney(product.price)}
+                  {(product.variants ?? []).length > 0
+                    ? `ab ${formatMoney(Math.min(...product.variants!.map((v) => v.price)))} · ${product.variants!.length} Varianten`
+                    : formatMoney(product.price)}
                   {product.modifiers.length > 0 && ` · ${product.modifiers.length} Optionen`}
                 </p>
               </div>
@@ -110,7 +112,13 @@ function ProductEditor({
   const [price, setPrice] = useState(product ? (product.price / 100).toFixed(2).replace('.', ',') : '');
   const [categoryId, setCategoryId] = useState(product?.categoryId ?? defaultCategoryId);
   const [description, setDescription] = useState(product?.description ?? '');
+  const [variants, setVariants] = useState<Variant[]>(product?.variants ?? []);
   const [modifiers, setModifiers] = useState<ModifierOption[]>(product?.modifiers ?? []);
+
+  const addVariant = () => setVariants((v) => [...v, { id: uid('v-'), name: '', price: 0 }]);
+  const setVariant = (id: string, patch: Partial<Variant>) =>
+    setVariants((v) => v.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+  const delVariant = (id: string) => setVariants((v) => v.filter((x) => x.id !== id));
 
   const addMod = () => setModifiers((m) => [...m, { id: uid('m-'), name: '', price: 0 }]);
   const setMod = (id: string, patch: Partial<ModifierOption>) =>
@@ -124,6 +132,7 @@ function ProductEditor({
       price: parseMoney(price),
       categoryId,
       description: description.trim() || undefined,
+      variants: variants.filter((v) => v.name.trim()),
       modifiers: modifiers.filter((m) => m.name.trim()),
       active: product?.active ?? true,
     };
@@ -167,6 +176,45 @@ function ProductEditor({
         <div>
           <label className="mb-1 block text-sm font-semibold text-slate-500">Beschreibung (optional)</label>
           <input value={description} onChange={(e) => setDescription(e.target.value)} className="input" />
+        </div>
+
+        <div>
+          <div className="mb-2 flex items-center justify-between">
+            <label className="text-sm font-semibold text-slate-500">Varianten / Größen</label>
+            <button onClick={addVariant} className="text-sm font-bold text-brand-600">
+              + Variante
+            </button>
+          </div>
+          <p className="mb-2 text-xs text-slate-400">
+            Eigener Preis je Variante (z. B. Klein/Mittel/Groß). Vorhandene Varianten ersetzen den Grundpreis.
+          </p>
+          <div className="space-y-2">
+            {variants.map((v) => (
+              <div key={v.id} className="flex gap-2">
+                <input
+                  value={v.name}
+                  onChange={(e) => setVariant(v.id, { name: e.target.value })}
+                  className="input flex-1"
+                  placeholder="z. B. Groß Ø40"
+                />
+                <input
+                  value={v.price ? (v.price / 100).toFixed(2).replace('.', ',') : ''}
+                  onChange={(e) => setVariant(v.id, { price: parseMoney(e.target.value) })}
+                  inputMode="decimal"
+                  className="input w-24 text-right"
+                  placeholder="0,00"
+                />
+                <button onClick={() => delVariant(v.id)} className="rounded-lg px-3 text-red-500 hover:bg-red-50">
+                  <Trash2 size={18} />
+                </button>
+              </div>
+            ))}
+            {variants.length === 0 && (
+              <p className="rounded-xl bg-slate-50 px-4 py-2.5 text-sm text-slate-400">
+                Keine Varianten – es gilt der Grundpreis oben.
+              </p>
+            )}
+          </div>
         </div>
 
         <div>

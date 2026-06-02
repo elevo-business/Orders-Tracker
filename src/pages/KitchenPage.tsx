@@ -260,6 +260,11 @@ function KitchenTicket({
               <span className="flex-1">
                 <span className="flex items-center gap-2 font-bold">
                   {item.qty}× {item.name}
+                  {item.variantName && (
+                    <span className="rounded bg-slate-600 px-1.5 py-0.5 text-[11px] font-bold text-white">
+                      {item.variantName}
+                    </span>
+                  )}
                   {showStationTags && st && (
                     <span
                       className="rounded px-1.5 py-0.5 text-[10px] font-bold"

@@ -12,6 +12,7 @@ import type {
   Station,
   Table,
   User,
+  Variant,
 } from '@/types';
 import { uid } from '@/lib/id';
 import {
@@ -57,7 +58,13 @@ interface Actions {
   // Bestellungen
   openOrderForTable: (table: Table) => ID;
   startTakeaway: () => ID;
-  addItem: (orderId: ID, product: Product, modifiers: ModifierOption[], note?: string) => void;
+  addItem: (
+    orderId: ID,
+    product: Product,
+    modifiers: ModifierOption[],
+    variant?: Variant,
+    note?: string,
+  ) => void;
   changeQty: (orderId: ID, itemId: ID, delta: number) => void;
   removeItem: (orderId: ID, itemId: ID) => void;
   setItemNote: (orderId: ID, itemId: ID, note: string) => void;
@@ -88,7 +95,7 @@ const initialData: DataState = {
   orderCounter: 0,
 };
 
-const STORAGE_KEY = 'elevo-pos-v2';
+const STORAGE_KEY = 'elevo-pos-v3';
 const SYNC_CHANNEL = 'elevo-pos-sync';
 
 export const useStore = create<Store>()(
@@ -166,18 +173,20 @@ export const useStore = create<Store>()(
         return order.id;
       },
 
-      addItem: (orderId, product, modifiers, note) =>
+      addItem: (orderId, product, modifiers, variant, note) =>
         set((s) => ({
           orders: s.orders.map((o) => {
             if (o.id !== orderId) return o;
-            const unitPrice = product.price + modifiers.reduce((sum, m) => sum + m.price, 0);
+            const base = variant?.price ?? product.price;
+            const unitPrice = base + modifiers.reduce((sum, m) => sum + m.price, 0);
             const stationId = s.categories.find((c) => c.id === product.categoryId)?.stationId ?? '';
             const modSig = modifiers.map((m) => m.id).sort().join(',');
-            // Gleiche Position (Produkt + Optionen + Notiz), die noch nicht gefeuert wurde → Menge erhöhen.
+            // Gleiche Position (Produkt + Variante + Optionen + Notiz), die noch nicht gefeuert wurde → Menge erhöhen.
             const match = o.items.find(
               (i) =>
                 i.productId === product.id &&
                 i.status === 'neu' &&
+                (i.variantName ?? '') === (variant?.name ?? '') &&
                 (i.note ?? '') === (note ?? '') &&
                 i.modifiers.map((m) => m.name).sort().join(',') ===
                   modifiers.map((m) => m.name).sort().join(','),
@@ -193,6 +202,7 @@ export const useStore = create<Store>()(
               productId: product.id,
               name: product.name,
               stationId,
+              variantName: variant?.name,
               unitPrice,
               qty: 1,
               modifiers: modifiers.map((m) => ({ name: m.name, price: m.price })),

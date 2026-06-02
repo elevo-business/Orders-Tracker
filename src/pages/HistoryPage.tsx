@@ -136,6 +136,7 @@ function Receipt({ order }: { order: Order }) {
             <div className="flex justify-between">
               <span>
                 {item.qty}× {item.name}
+                {item.variantName ? ` (${item.variantName})` : ''}
               </span>
               <span>{formatMoney(itemTotal(item))}</span>
             </div>
