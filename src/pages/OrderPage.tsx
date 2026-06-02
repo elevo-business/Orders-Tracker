@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Minus, Plus, Send, Trash2, CreditCard, StickyNote } from 'lucide-react';
+import { ArrowLeft, Minus, Plus, Send, Trash2, CreditCard, StickyNote, ShoppingCart, UtensilsCrossed } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 import { formatMoney } from '@/lib/money';
-import { itemTotal, orderTotal, orderTax, unsentItems } from '@/lib/order';
+import { itemTotal, orderTotal, orderTax, unsentItems, orderItemCount } from '@/lib/order';
 import type { ModifierOption, Product } from '@/types';
 import { Modal } from '@/components/Modal';
 import { CheckoutModal } from '@/components/CheckoutModal';
@@ -27,6 +27,8 @@ export function OrderPage() {
   const [modifierProduct, setModifierProduct] = useState<Product | null>(null);
   const [noteItemId, setNoteItemId] = useState<string | null>(null);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+  // Mobile: zwischen Produktauswahl und Warenkorb umschalten
+  const [mobileTab, setMobileTab] = useState<'produkte' | 'warenkorb'>('produkte');
 
   if (!order) {
     return (
@@ -43,181 +45,203 @@ export function OrderPage() {
   const total = orderTotal(order);
   const tax = orderTax(order, settings);
   const newCount = unsentItems(order).length;
+  const itemCount = orderItemCount(order);
   const isPaid = order.status === 'bezahlt';
 
   const onProductTap = (product: Product) => {
     if (isPaid) return;
-    if (product.modifiers.length > 0) {
-      setModifierProduct(product);
-    } else {
-      addItem(order.id, product, []);
-    }
+    if (product.modifiers.length > 0) setModifierProduct(product);
+    else addItem(order.id, product, []);
   };
 
   const noteItem = order.items.find((i) => i.id === noteItemId);
 
   return (
-    <div className="flex h-full">
-      {/* Produktbereich */}
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <header className="flex items-center gap-4 px-6 py-4">
-          <button onClick={() => navigate('/pos')} className="btn-ghost px-3 py-3">
-            <ArrowLeft size={22} />
-          </button>
-          <div>
-            <h1 className="text-xl font-extrabold">{order.tableName}</h1>
-            <p className="text-xs text-slate-500">
-              Bestellung #{order.number} · {order.status}
-            </p>
-          </div>
-        </header>
-
-        {/* Kategorien */}
-        <div className="scroll-area flex gap-2 px-6 pb-3">
-          {sortedCats.map((cat) => (
-            <button
-              key={cat.id}
-              onClick={() => setActiveCat(cat.id)}
-              className={`flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 font-semibold transition ${
-                activeCat === cat.id ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 shadow-card'
-              }`}
-            >
-              <span>{cat.emoji}</span>
-              {cat.name}
-            </button>
-          ))}
+    <div className="flex h-full flex-col">
+      {/* Kopfzeile */}
+      <header className="flex items-center gap-3 px-4 py-3 sm:px-6 sm:py-4">
+        <button onClick={() => navigate('/pos')} className="btn-ghost px-3 py-3">
+          <ArrowLeft size={22} />
+        </button>
+        <div className="min-w-0">
+          <h1 className="truncate text-lg font-extrabold sm:text-xl">{order.tableName}</h1>
+          <p className="text-xs text-slate-500">
+            Bestellung #{order.number} · {order.status}
+          </p>
         </div>
+      </header>
 
-        {/* Produkte */}
-        <div className="scroll-area flex-1 px-6 pb-6">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-            {visibleProducts.map((product) => (
-              <button
-                key={product.id}
-                onClick={() => onProductTap(product)}
-                disabled={isPaid}
-                className="card flex aspect-[4/3] flex-col items-center justify-center gap-1 p-3 text-center active:scale-[0.97] disabled:opacity-50"
-              >
-                <span className="text-3xl">{product.emoji ?? '🍽️'}</span>
-                <span className="line-clamp-2 text-sm font-bold leading-tight">{product.name}</span>
-                <span className="text-sm font-semibold text-brand-600">{formatMoney(product.price)}</span>
-              </button>
-            ))}
-            {visibleProducts.length === 0 && (
-              <p className="col-span-full py-12 text-center text-slate-400">
-                Keine Produkte in dieser Kategorie.
-              </p>
-            )}
-          </div>
-        </div>
+      {/* Mobile-Umschalter */}
+      <div className="flex gap-2 px-4 pb-2 lg:hidden">
+        <button
+          onClick={() => setMobileTab('produkte')}
+          className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-bold transition ${
+            mobileTab === 'produkte' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 shadow-card'
+          }`}
+        >
+          <UtensilsCrossed size={18} /> Produkte
+        </button>
+        <button
+          onClick={() => setMobileTab('warenkorb')}
+          className={`relative flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-bold transition ${
+            mobileTab === 'warenkorb' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 shadow-card'
+          }`}
+        >
+          <ShoppingCart size={18} /> Warenkorb
+          {itemCount > 0 && (
+            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-500 px-1 text-[11px] font-bold text-white">
+              {itemCount}
+            </span>
+          )}
+        </button>
       </div>
 
-      {/* Warenkorb / Rechnung */}
-      <aside className="flex w-[380px] shrink-0 flex-col border-l border-slate-200 bg-white">
-        <div className="px-5 py-4">
-          <h2 className="text-lg font-extrabold">Bestellung</h2>
-        </div>
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+        {/* Produktbereich */}
+        <div className={`min-h-0 flex-1 flex-col ${mobileTab === 'produkte' ? 'flex' : 'hidden'} lg:flex`}>
+          {/* Kategorien */}
+          <div className="scroll-area flex gap-2 px-4 pb-3 sm:px-6">
+            {sortedCats.map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => setActiveCat(cat.id)}
+                className={`flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 font-semibold transition ${
+                  activeCat === cat.id ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 shadow-card'
+                }`}
+              >
+                <span>{cat.emoji}</span>
+                {cat.name}
+              </button>
+            ))}
+          </div>
 
-        <div className="scroll-area flex-1 px-3">
-          {order.items.length === 0 && (
-            <p className="px-2 py-12 text-center text-slate-400">Noch keine Artikel.</p>
-          )}
-          {order.items.map((item) => (
-            <div
-              key={item.id}
-              className={`mb-2 rounded-xl border p-3 ${
-                item.status === 'neu' ? 'border-brand-200 bg-brand-50' : 'border-slate-100 bg-slate-50'
-              }`}
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="truncate font-bold">{item.name}</p>
-                  {item.modifiers.length > 0 && (
-                    <p className="truncate text-xs text-slate-500">
-                      {item.modifiers.map((m) => m.name).join(', ')}
-                    </p>
-                  )}
-                  {item.note && <p className="truncate text-xs italic text-amber-600">„{item.note}"</p>}
-                  {item.status !== 'neu' && (
-                    <span className="mt-1 inline-block rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-600">
-                      {item.status}
-                    </span>
-                  )}
-                </div>
-                <span className="shrink-0 font-bold">{formatMoney(itemTotal(item))}</span>
-              </div>
-              {!isPaid && (
-                <div className="mt-2 flex items-center gap-2">
-                  <button
-                    onClick={() => changeQty(order.id, item.id, -1)}
-                    className="flex h-9 w-9 items-center justify-center rounded-lg bg-white shadow-card active:scale-95"
-                  >
-                    <Minus size={16} />
-                  </button>
-                  <span className="w-8 text-center font-bold">{item.qty}</span>
-                  <button
-                    onClick={() => changeQty(order.id, item.id, 1)}
-                    className="flex h-9 w-9 items-center justify-center rounded-lg bg-white shadow-card active:scale-95"
-                  >
-                    <Plus size={16} />
-                  </button>
-                  <div className="ml-auto flex gap-1">
-                    <button
-                      onClick={() => setNoteItemId(item.id)}
-                      className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-slate-500 shadow-card active:scale-95"
-                    >
-                      <StickyNote size={16} />
-                    </button>
-                    {item.status === 'neu' && (
-                      <button
-                        onClick={() => removeItem(order.id, item.id)}
-                        className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-red-500 shadow-card active:scale-95"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    )}
-                  </div>
-                </div>
+          {/* Produkte */}
+          <div className="scroll-area min-h-0 flex-1 px-4 pb-6 sm:px-6">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+              {visibleProducts.map((product) => (
+                <button
+                  key={product.id}
+                  onClick={() => onProductTap(product)}
+                  disabled={isPaid}
+                  className="card flex aspect-[4/3] flex-col items-center justify-center gap-1 p-3 text-center active:scale-[0.97] disabled:opacity-50"
+                >
+                  <span className="text-3xl">{product.emoji ?? '🍽️'}</span>
+                  <span className="line-clamp-2 text-sm font-bold leading-tight">{product.name}</span>
+                  <span className="text-sm font-semibold text-brand-600">{formatMoney(product.price)}</span>
+                </button>
+              ))}
+              {visibleProducts.length === 0 && (
+                <p className="col-span-full py-12 text-center text-slate-400">Keine Produkte in dieser Kategorie.</p>
               )}
             </div>
-          ))}
+          </div>
         </div>
 
-        {/* Summen + Aktionen */}
-        <div className="border-t border-slate-100 px-5 py-4">
-          <div className="mb-1 flex justify-between text-sm text-slate-500">
-            <span>inkl. {(settings.taxRate * 100).toFixed(0)}% MwSt</span>
-            <span>{formatMoney(tax)}</span>
-          </div>
-          <div className="mb-4 flex justify-between text-2xl font-extrabold">
-            <span>Gesamt</span>
-            <span>{formatMoney(total)}</span>
+        {/* Warenkorb / Rechnung */}
+        <aside
+          className={`min-h-0 w-full flex-col border-slate-200 bg-white lg:flex lg:w-[380px] lg:border-l ${
+            mobileTab === 'warenkorb' ? 'flex' : 'hidden'
+          }`}
+        >
+          <div className="hidden px-5 py-4 lg:block">
+            <h2 className="text-lg font-extrabold">Bestellung</h2>
           </div>
 
-          {!isPaid ? (
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => sendOrder(order.id)}
-                disabled={newCount === 0}
-                className="btn-ghost"
+          <div className="scroll-area min-h-0 flex-1 px-3 pt-2 lg:pt-0">
+            {order.items.length === 0 && (
+              <p className="px-2 py-12 text-center text-slate-400">Noch keine Artikel.</p>
+            )}
+            {order.items.map((item) => (
+              <div
+                key={item.id}
+                className={`mb-2 rounded-xl border p-3 ${
+                  item.status === 'neu' ? 'border-brand-200 bg-brand-50' : 'border-slate-100 bg-slate-50'
+                }`}
               >
-                <Send size={18} /> An Küche{newCount > 0 ? ` (${newCount})` : ''}
-              </button>
-              <button
-                onClick={() => setCheckoutOpen(true)}
-                disabled={order.items.length === 0}
-                className="btn-primary"
-              >
-                <CreditCard size={18} /> Bezahlen
-              </button>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate font-bold">{item.name}</p>
+                    {item.modifiers.length > 0 && (
+                      <p className="truncate text-xs text-slate-500">{item.modifiers.map((m) => m.name).join(', ')}</p>
+                    )}
+                    {item.note && <p className="truncate text-xs italic text-amber-600">„{item.note}"</p>}
+                    {item.status !== 'neu' && (
+                      <span className="mt-1 inline-block rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-600">
+                        {item.status}
+                      </span>
+                    )}
+                  </div>
+                  <span className="shrink-0 font-bold">{formatMoney(itemTotal(item))}</span>
+                </div>
+                {!isPaid && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <button
+                      onClick={() => changeQty(order.id, item.id, -1)}
+                      className="flex h-9 w-9 items-center justify-center rounded-lg bg-white shadow-card active:scale-95"
+                    >
+                      <Minus size={16} />
+                    </button>
+                    <span className="w-8 text-center font-bold">{item.qty}</span>
+                    <button
+                      onClick={() => changeQty(order.id, item.id, 1)}
+                      className="flex h-9 w-9 items-center justify-center rounded-lg bg-white shadow-card active:scale-95"
+                    >
+                      <Plus size={16} />
+                    </button>
+                    <div className="ml-auto flex gap-1">
+                      <button
+                        onClick={() => setNoteItemId(item.id)}
+                        className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-slate-500 shadow-card active:scale-95"
+                      >
+                        <StickyNote size={16} />
+                      </button>
+                      {item.status === 'neu' && (
+                        <button
+                          onClick={() => removeItem(order.id, item.id)}
+                          className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-red-500 shadow-card active:scale-95"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Summen + Aktionen */}
+          <div className="border-t border-slate-100 px-5 py-4">
+            <div className="mb-1 flex justify-between text-sm text-slate-500">
+              <span>inkl. {(settings.taxRate * 100).toFixed(0)}% MwSt</span>
+              <span>{formatMoney(tax)}</span>
             </div>
-          ) : (
-            <div className="rounded-xl bg-green-50 px-4 py-3 text-center font-bold text-green-700">
-              ✓ Bezahlt – {formatMoney(total)}
+            <div className="mb-4 flex justify-between text-2xl font-extrabold">
+              <span>Gesamt</span>
+              <span>{formatMoney(total)}</span>
             </div>
-          )}
-        </div>
-      </aside>
+
+            {!isPaid ? (
+              <div className="grid grid-cols-2 gap-3">
+                <button onClick={() => sendOrder(order.id)} disabled={newCount === 0} className="btn-ghost">
+                  <Send size={18} /> An Küche{newCount > 0 ? ` (${newCount})` : ''}
+                </button>
+                <button
+                  onClick={() => setCheckoutOpen(true)}
+                  disabled={order.items.length === 0}
+                  className="btn-primary"
+                >
+                  <CreditCard size={18} /> Bezahlen
+                </button>
+              </div>
+            ) : (
+              <div className="rounded-xl bg-green-50 px-4 py-3 text-center font-bold text-green-700">
+                ✓ Bezahlt – {formatMoney(total)}
+              </div>
+            )}
+          </div>
+        </aside>
+      </div>
 
       {/* Optionen-Auswahl */}
       {modifierProduct && (

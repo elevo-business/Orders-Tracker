@@ -34,8 +34,8 @@ export function LoginScreen() {
   };
 
   return (
-    <div className="flex h-full w-full items-center justify-center bg-slate-900 p-6">
-      <div className="grid w-full max-w-4xl gap-6 md:grid-cols-2">
+    <div className="flex h-full w-full items-start justify-center overflow-y-auto bg-slate-900 p-4 sm:items-center sm:p-6">
+      <div className="grid w-full max-w-4xl gap-6 py-6 md:grid-cols-2 md:py-0">
         {/* Konten */}
         <div className="text-white">
           <div className="mb-6 flex items-center gap-3">
